@@ -9,7 +9,7 @@ D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/monitor.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/flash.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/encrypted-flash.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/_project_elf_src.dir
-D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/FS-test.elf.dir
+D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/Data-Fly.elf.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/size.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/size-files.dir
 D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/CMakeFiles/size-components.dir

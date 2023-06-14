@@ -12,7 +12,7 @@
 // be written in camelCase, whereas variables will be written in snake_case.
 
 // For error handling, for compatibility reasons, global error variables are used, 
-// in that sense, functions would expect a pointer to as a first argument and then modify it.
+// in that sense, functions would expect a pointer to the error_variable as a first argument and then modify it.
 #pragma once
 
 #include "esp_vfs_fat.h"
@@ -35,6 +35,7 @@ esp_vfs_fat_sdmmc_mount_config_t mountConfig()
     // Options for mounting the filesystem.
     // If format_if_mount_failed is set to true, SD card will be partitioned and
     // formatted in case when mounting fails.
+    // Note: DO NOT RELY ON THIS. It is better to flash your sd-card before mounting.
     esp_vfs_fat_sdmmc_mount_config_t mount_config = {
 #ifdef CONFIG_EXAMPLE_FORMAT_IF_MOUNT_FAILED
         .format_if_mount_failed = true,

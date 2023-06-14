@@ -16,9 +16,9 @@
 
 static const uint8_t led_file = 33;
 static esp_err_t err_file; 
-static char count_file = '0';
+static int count_file = 1000;
 
-// const char* TAG_H = "FILE_HANDLDE_H";
+// const char* "FILE_HANDLE_H" = "FILE_HANDLDE_H";
 
 static QueueHandle_t err_queue = NULL;
 static QueueHandle_t data_queue = NULL;
@@ -32,13 +32,10 @@ void createErrQueue()
     if (!err_queue)
     {
         err_file = ESP_FAIL;
-        if (xQueueSend(err_queue, (void *) &err_file, 10) != pdPASS)
-        {
-            gpio_set_level(led_file, 1);
-        }
-        ESP_LOGE(TAG_H, "Error Creating ERROR Queue");
+        gpio_set_level(led_file, 1);
+        ESP_LOGE("FILE_HANDLE_H", "Error Creating ERROR Queue");
     } else {
-        ESP_LOGI(TAG_H, "Error queue created succesfully");
+        ESP_LOGI("FILE_HANDLE_H", "Error queue created succesfully");
     }
 }
 
@@ -49,7 +46,7 @@ void createErrQueue()
 void createDataQueue()
 {
     // data_queue = xQueueCreate(64, sizeof(char));
-    data_queue = xQueueCreate(10, sizeof(int));
+    data_queue = xQueueCreate(100, sizeof(twai_message_t));
     if (!data_queue)
     {
         err_file = ESP_FAIL;
@@ -57,9 +54,9 @@ void createDataQueue()
         {
             gpio_set_level(led_file, 1);
         }
-        ESP_LOGE(TAG_H, "Error Creating DATA Queue");
+        ESP_LOGE("FILE_HANDLE_H", "Error Creating DATA Queue");
     } else {
-        ESP_LOGI(TAG_H, "Data Queue created succesfully");
+        ESP_LOGI("FILE_HANDLE_H", "Data Queue created succesfully");
     }
 }
 
@@ -81,7 +78,7 @@ void blinkErrorLED(void* pvParameter)
     {
         if (xQueueReceive(err_queue, &err_file, portMAX_DELAY) == pdPASS)
         {
-            ESP_LOGE(TAG_H, "An error has occured");
+            ESP_LOGE("FILE_HANDLE_H", "An error has occured");
             for (size_t i = 0; i < 15; i++)
             {
                 gpio_set_level(led_file, 1);
@@ -100,16 +97,16 @@ void blinkErrorLED(void* pvParameter)
 void createDirectory(const char* file_name_)
 {
     err_file = f_mkdir(file_name_);
-    ESP_LOGI(TAG_H, "Creating directory");
+    ESP_LOGI("FILE_HANDLE_H", "Creating directory");
     if (err_file == ESP_OK)
     {
-        ESP_LOGI(TAG_H, "Directory created");
+        ESP_LOGI("FILE_HANDLE_H", "Directory created");
     } else if (err_file == FR_EXIST)
     {
-        ESP_LOGW(TAG_H, "Directory exists");
+        ESP_LOGW("FILE_HANDLE_H", "Directory exists");
     } else
     {
-        ESP_LOGE(TAG_H, "Error Creating Directory:");
+        ESP_LOGE("FILE_HANDLE_H", "Error Creating Directory:");
         xQueueSend(err_queue, (void*) &err_file, portMAX_DELAY);
     }
 }
@@ -118,19 +115,21 @@ void createDirectory(const char* file_name_)
 // Regular function: Returning the name of the file to be ceated. Yeaaaaah another 10 line function to create the obvious, long live C. 
 // This function is to be modified later, as the name of the file would strongly depend on the date of creation.
 // For now it just appends an increasing number to the file. 
+
 const char* getFileName()
 {
+    char int_str[32];
+        
     char* file_name = malloc(64);
-    const char* constant_name = MOUNT_POINT"/LOG_FS/log_";
+    char* constant_name = MOUNT_POINT"/LOG_FS/log_";
     strcpy(file_name, constant_name);
-    file_name[strlen(constant_name)] = count_file++;
-    file_name[strlen(constant_name) + 1] = '.';
-    file_name[strlen(constant_name) + 2] = 'd';
-    file_name[strlen(constant_name) + 3] = 'b';
-    file_name[strlen(constant_name) + 4] = 'f';
-    file_name[strlen(constant_name) + 5] = '\0';
+
+    sprintf(int_str, "%d", count_file++);
+    strcat(file_name, int_str);
+    strcat(file_name, ".dbf");
     return file_name;
 }
+
 
 
 // Task: Create a file in sd-card, and write buffers that comes into the queue.
@@ -154,58 +153,64 @@ const char* getFileName()
 void writeFile(void* pvParameter)
 {
     // vTaskDelay(100);
-    const char *file_hello = getFileName();
-    FILE *f = fopen(file_hello, "a");
+    const char* file_name = getFileName();
+    int number_of_lines = 0;
+    FILE *f = fopen(file_name, "a");
     if (!f)
     {
-        ESP_LOGE(TAG_H, "Failed to open file %s for writing", file_hello);
+        ESP_LOGE("FILE_HANDLE_H", "Failed to open file %s for writing", file_name);
     } else {
-        ESP_LOGI(TAG_H, "File created succesfully");
+        ESP_LOGI("FILE_HANDLE_H", "File created succesfully");
     }
     while (1)
     {
-        int c;
-        if (xQueueReceive(data_queue, &c, 10) != pdPASS)
+        //replace c with the CAN message.
+        twai_message_t message;
+        if (xQueueReceive(data_queue, &message, 10000) != pdPASS)
         {
             xQueueSend(err_queue, (void*) &err_file, portMAX_DELAY);
-            ESP_LOGI(TAG_H, "Error receiving data from the queue");
+            ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the queue");
             break;
         } else {
-            fprintf(f, "%d\n", c);
-            ESP_LOGI(TAG_H, "Receiving %d", c);
-            // f.close();
-            // break
+            fprintf(f, "%ld\t", message.identifier);
+            for (int i = 0; i < message.data_length_code; i++) {
+                fprintf(f, "%X ", message.data[i]);
+            }
+            fprintf(f, "\n");
+            // ESP_LOGI("FILE_HANDLE_H", "Receiving %d", c);
         }
-        if(c == 1000)
+        if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
         {
             fclose(f);
-            break;
+            ESP_LOGI("FILE_HANDLE_H", "file Closed");
+            f = fopen(file_name, "a");
+            number_of_lines = 0;
         }
         vTaskDelay(0);
-        
     }
+    fclose(f);
     vTaskDelete(NULL);
 }
 
-void sendDataToWrite(void* pvParameter)
-{
-    int count = 0;
-    while (1)
-    {
-        // const char* text = "Strangers passing in the street";
-        ESP_LOGI(TAG_H, "Sending %d", count);
-        xQueueSend(data_queue, (void *) &count, portMAX_DELAY);
-        // for (size_t i = 0; i < 5; i++)
-        // {
-        //     // xQueueSend(data_queue, (void *) &i, 10);
-        //     gpio_set_level(led_file, 1);
-        //     vTaskDelay(10);
-        //     gpio_set_level(led_file, 0);
-        //     vTaskDelay(10);
-        // }
-        count++;
-        // taskYIELD();
-        vTaskDelay(1);
-    }  
-    vTaskDelete(NULL);
-}
+// void sendDataToWrite(void* pvParameter)
+// {
+//     int count = 0;
+//     while (1)
+//     {
+//         // const char* text = "Strangers passing in the street";
+//         ESP_LOGI("FILE_HANDLE_H", "Sending %d", count);
+//         xQueueSend(data_queue, (void *) &count, portMAX_DELAY);
+//         // for (size_t i = 0; i < 5; i++)
+//         // {
+//         //     // xQueueSend(data_queue, (void *) &i, 10);
+//         //     gpio_set_level(led_file, 1);
+//         //     vTaskDelay(10);
+//         //     gpio_set_level(led_file, 0);
+//         //     vTaskDelay(10);
+//         // }
+//         count++;
+//         // taskYIELD();
+//         vTaskDelay(1);
+//     }  
+//     vTaskDelete(NULL);
+// }

@@ -216,7 +216,7 @@ CMAKE_PROJECT_DESCRIPTION:STATIC=
 CMAKE_PROJECT_HOMEPAGE_URL:STATIC=
 
 //Value Computed by CMake
-CMAKE_PROJECT_NAME:STATIC=FS-test
+CMAKE_PROJECT_NAME:STATIC=Data-Fly
 
 //Path to a program.
 CMAKE_RANLIB:FILEPATH=D:/Users/esset/.espressif/tools/xtensa-esp32-elf/esp-2022r1-11.2.0/xtensa-esp32-elf/bin/xtensa-esp32-elf-ranlib.exe
@@ -285,6 +285,15 @@ CMAKE_VERBOSE_MAKEFILE:BOOL=FALSE
 
 //Disable package configuration, target export and installation
 DISABLE_PACKAGE_CONFIG_AND_INSTALL:BOOL=ON
+
+//Value Computed by CMake
+Data-Fly_BINARY_DIR:STATIC=D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build
+
+//Value Computed by CMake
+Data-Fly_IS_TOP_LEVEL:STATIC=ON
+
+//Value Computed by CMake
+Data-Fly_SOURCE_DIR:STATIC=D:/Users/esset/Documents/VSCode/esp-idf/FS-test
 
 //Build mbed TLS programs.
 ENABLE_PROGRAMS:BOOL=
