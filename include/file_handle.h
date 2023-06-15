@@ -13,10 +13,11 @@
 // behaviour for writing. (Time constraints and rapidity to be mesured later).
 
 #include "freertos/queue.h"
+#include "esp_timer.h"
 
 static const uint8_t led_file = 33;
 static esp_err_t err_file; 
-static int count_file = 1000;
+static int count_file = 2000;
 
 // const char* "FILE_HANDLE_H" = "FILE_HANDLDE_H";
 
@@ -126,7 +127,7 @@ const char* getFileName()
 
     sprintf(int_str, "%d", count_file++);
     strcat(file_name, int_str);
-    strcat(file_name, ".dbf");
+    strcat(file_name, ".asc");
     return file_name;
 }
 
@@ -160,11 +161,10 @@ void writeFile(void* pvParameter)
     {
         ESP_LOGE("FILE_HANDLE_H", "Failed to open file %s for writing", file_name);
     } else {
-        ESP_LOGI("FILE_HANDLE_H", "File created succesfully");
+        ESP_LOGI("FILE_HANDLE_H", "File %s created succesfully", file_name);
     }
     while (1)
     {
-        //replace c with the CAN message.
         twai_message_t message;
         if (xQueueReceive(data_queue, &message, 10000) != pdPASS)
         {
@@ -172,9 +172,11 @@ void writeFile(void* pvParameter)
             ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the queue");
             break;
         } else {
-            fprintf(f, "%ld\t", message.identifier);
+            char data_or_request = message.rtr ? 'r' : 'd';
+            fprintf(f, " %f 1        %03lX             Tx   %c %d", (double) esp_timer_get_time()*1e-6, 
+            message.identifier, data_or_request, message.data_length_code);
             for (int i = 0; i < message.data_length_code; i++) {
-                fprintf(f, "%X ", message.data[i]);
+                fprintf(f, " %02X", message.data[i]);
             }
             fprintf(f, "\n");
             // ESP_LOGI("FILE_HANDLE_H", "Receiving %d", c);

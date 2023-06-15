@@ -6,7 +6,7 @@ void SendCANData(void *param)
     {
         //Wait for message to be received
         twai_message_t message;
-        if (twai_receive(&message, pdMS_TO_TICKS(1000mn0)) == ESP_OK) {
+        if (twai_receive(&message, pdMS_TO_TICKS(10000)) == ESP_OK) {
             // ESP_LOGI("CAN_NODE_H", "Message received\n");
             xQueueSend(data_queue, (void *) &message, portMAX_DELAY);
         } else {
