@@ -2,7 +2,7 @@
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/FS-test")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/Data-Fly")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 
@@ -39,6 +39,6 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/esp-idf/soc/esp32/cmake_install.cmake")
+  include("D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/esp-idf/soc/esp32/cmake_install.cmake")
 endif()
 

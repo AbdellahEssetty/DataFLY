@@ -5,18 +5,18 @@ cmake_minimum_required(VERSION 3.5)
 
 file(MAKE_DIRECTORY
   "D:/Users/esset/esp/esp-idf/components/bootloader/subproject"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/tmp"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/src/bootloader-stamp"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/src"
-  "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/src/bootloader-stamp"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/tmp"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/src/bootloader-stamp"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/src"
+  "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/src/bootloader-stamp"
 )
 
 set(configSubDirs )
 foreach(subDir IN LISTS configSubDirs)
-    file(MAKE_DIRECTORY "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
+    file(MAKE_DIRECTORY "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/src/bootloader-stamp/${subDir}")
 endforeach()
 if(cfgdir)
-  file(MAKE_DIRECTORY "D:/Users/esset/Documents/VSCode/esp-idf/FS-test/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
+  file(MAKE_DIRECTORY "D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/build/bootloader-prefix/src/bootloader-stamp${cfgdir}") # cfgdir has leading slash
 endif()

@@ -11,26 +11,26 @@
 // A queue is also used for passing data from a one place to another, the file writing would use the queue to get 
 // data from the CAN bus, and then pass it to the file. Following this approach provide a thread safe, atomic 
 // behaviour for writing. (Time constraints and rapidity to be mesured later).
-
+#pragma once
 #include "freertos/queue.h"
 #include "esp_timer.h"
 
 static const uint8_t led_file = 33;
 static esp_err_t err_file; 
-static int count_file = 2000;
+static int count_file = 3000;
 
 // const char* "FILE_HANDLE_H" = "FILE_HANDLDE_H";
 
-static QueueHandle_t err_queue = NULL;
-static QueueHandle_t data_queue = NULL;
+static QueueHandle_t file_err_queue = NULL;
+static QueueHandle_t file_data_queue = NULL;
 
 
 // Regular function: creating the queue for handling errors.
 
-void createErrQueue()
+void createFileErrQueue()
 {
-    err_queue = xQueueCreate(10, sizeof(esp_err_t));
-    if (!err_queue)
+    file_err_queue = xQueueCreate(10, sizeof(esp_err_t));
+    if (!file_err_queue)
     {
         err_file = ESP_FAIL;
         gpio_set_level(led_file, 1);
@@ -44,14 +44,14 @@ void createErrQueue()
 // This function is to be modified later, for causes of globality, the data is likely to be coming
 // other source files, which makes passing data between them a little bit tricky.
 
-void createDataQueue()
+void createFileDataQueue()
 {
-    // data_queue = xQueueCreate(64, sizeof(char));
-    data_queue = xQueueCreate(100, sizeof(twai_message_t));
-    if (!data_queue)
+    // file_data_queue = xQueueCreate(64, sizeof(char));
+    file_data_queue = xQueueCreate(100, sizeof(twai_message_t));
+    if (!file_data_queue)
     {
         err_file = ESP_FAIL;
-        if (xQueueSend(err_queue, (void *) &err_file, 10) != pdPASS)
+        if (xQueueSend(file_err_queue, (void *) &err_file, 10) != pdPASS)
         {
             gpio_set_level(led_file, 1);
         }
@@ -70,14 +70,14 @@ void createDataQueue()
 // be terminated anyway, so restarting and modifying is necessarry. Moreover, one problem is when multiple task throw errors at the 
 // same time).
 
-void blinkErrorLED(void* pvParameter)
+void blinkFileErrorLED(void* pvParameter)
 {
     // gpio_pad_select_gpio(led_file);
     gpio_set_direction(led_file, GPIO_MODE_OUTPUT);
 
     while (1)
     {
-        if (xQueueReceive(err_queue, &err_file, portMAX_DELAY) == pdPASS)
+        if (xQueueReceive(file_err_queue, &err_file, portMAX_DELAY) == pdPASS)
         {
             ESP_LOGE("FILE_HANDLE_H", "An error has occured");
             for (size_t i = 0; i < 15; i++)
@@ -108,7 +108,7 @@ void createDirectory(const char* file_name_)
     } else
     {
         ESP_LOGE("FILE_HANDLE_H", "Error Creating Directory:");
-        xQueueSend(err_queue, (void*) &err_file, portMAX_DELAY);
+        xQueueSend(file_err_queue, (void*) &err_file, portMAX_DELAY);
     }
 }
 
@@ -117,12 +117,12 @@ void createDirectory(const char* file_name_)
 // This function is to be modified later, as the name of the file would strongly depend on the date of creation.
 // For now it just appends an increasing number to the file. 
 
-const char* getFileName()
+const char* getFileName(bool is_data)
 {
     char int_str[32];
         
     char* file_name = malloc(64);
-    char* constant_name = MOUNT_POINT"/LOG_FS/log_";
+    char* constant_name = is_data ? MOUNT_POINT"/LOG_FS/log_" : MOUNT_POINT"/ERR_FS/log_";
     strcpy(file_name, constant_name);
 
     sprintf(int_str, "%d", count_file++);
@@ -131,9 +131,23 @@ const char* getFileName()
     return file_name;
 }
 
+/// @brief send error messages to error data queues for a specific duration (2 minutes)
+/// @param message TWAI (CAN) message to send
+/// @param send_err_messages a bool variable showing whether error messages should be sent or not.
+/// @param start_time starting time of sending error messages. 
+void sendErrorMessagesDuration(twai_message_t* message, bool* send_err_messages, int64_t* start_time)
+{
+    // int64_t start_time = esp_timer_get_time();
+    int64_t end_time = esp_timer_get_time();
+    int64_t time_difference = end_time - *start_time;
+    int64_t duration = 1 * 60 * 1e6;
+    if(time_difference < duration)
+        xQueueSend(trigger_err_data_queue, (void*) message, 0);
+    else
+        *send_err_messages = false;
+}
 
-
-// Task: Create a file in sd-card, and write buffers that comes into the queue.
+/// @brief Task: Create a file in sd-card, and write buffers that comes into the queue.
 // This task is to be modified (for compatibility reasons).
 // Some few important details about writing data to files.
 // File creation should be based on time (grab time from GPS module and name the file after it).
@@ -151,11 +165,12 @@ const char* getFileName()
 //      -If the file has reached some size limit.
 // Alternatively, a new file should be created:
 
-void writeFile(void* pvParameter)
+void writeDataToFile(void* pvParameter)
 {
     // vTaskDelay(100);
-    const char* file_name = getFileName();
+    const char* file_name = getFileName(true);
     int number_of_lines = 0;
+    bool send_err_messages = false;
     FILE *f = fopen(file_name, "a");
     if (!f)
     {
@@ -163,23 +178,33 @@ void writeFile(void* pvParameter)
     } else {
         ESP_LOGI("FILE_HANDLE_H", "File %s created succesfully", file_name);
     }
-    while (1)
+    while (true)
     {
         twai_message_t message;
-        if (xQueueReceive(data_queue, &message, 10000) != pdPASS)
+        int listen_message;
+        int64_t start_err_msg_time;
+        if (xQueueReceive(file_data_queue, &message, 10000) != pdPASS)
         {
-            xQueueSend(err_queue, (void*) &err_file, portMAX_DELAY);
+            xQueueSend(file_err_queue, (void*) &err_file, portMAX_DELAY);
             ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the queue");
             break;
         } else {
             char data_or_request = message.rtr ? 'r' : 'd';
             fprintf(f, " %f 1        %03lX             Tx   %c %d", (double) esp_timer_get_time()*1e-6, 
             message.identifier, data_or_request, message.data_length_code);
-            for (int i = 0; i < message.data_length_code; i++) {
+            for (int i = 0; i < message.data_length_code; i++) 
                 fprintf(f, " %02X", message.data[i]);
-            }
             fprintf(f, "\n");
-            // ESP_LOGI("FILE_HANDLE_H", "Receiving %d", c);
+            
+            // --------------- Check for errors -----------------//
+            if(xQueueReceive(trigger_listen_queue, (void*) &listen_message, 0))
+            {
+                send_err_messages = true;
+                start_err_msg_time = esp_timer_get_time();
+            }
+            if(send_err_messages)
+                sendErrorMessagesDuration(&message, &send_err_messages, &start_err_msg_time);
+                
         }
         if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
         {
@@ -194,6 +219,38 @@ void writeFile(void* pvParameter)
     vTaskDelete(NULL);
 }
 
+void writeDataToErrorFiles(void* pvParameter)
+{
+    int number_of_lines = 0;
+    const char* file_name = getFileName(false);
+    twai_message_t message;
+    FILE *f = fopen(file_name, "w");
+    while (true)
+    {
+
+        if(xQueueReceive(trigger_err_data_queue, (void*) &message, portMAX_DELAY) == pdPASS)
+        {
+            char data_or_request = message.rtr ? 'r' : 'd';
+            fprintf(f, " %f 1        %03lX             Tx   %c %d", (double) esp_timer_get_time()*1e-6, 
+            message.identifier, data_or_request, message.data_length_code);
+            for (int i = 0; i < message.data_length_code; i++) 
+                fprintf(f, " %02X", message.data[i]);
+            fprintf(f, "\n");
+            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
+            {
+                fclose(f);
+                ESP_LOGI("FILE_HANDLE_H", "Error file Closed");
+                f = fopen(file_name, "a");
+                number_of_lines = 0;
+            }
+            vTaskDelay(0);
+        }
+        // fclose(f);
+    }
+    fclose(f);
+    vTaskDelete(NULL);
+}
+
 // void sendDataToWrite(void* pvParameter)
 // {
 //     int count = 0;
@@ -201,10 +258,10 @@ void writeFile(void* pvParameter)
 //     {
 //         // const char* text = "Strangers passing in the street";
 //         ESP_LOGI("FILE_HANDLE_H", "Sending %d", count);
-//         xQueueSend(data_queue, (void *) &count, portMAX_DELAY);
+//         xQueueSend(file_data_queue, (void *) &count, portMAX_DELAY);
 //         // for (size_t i = 0; i < 5; i++)
 //         // {
-//         //     // xQueueSend(data_queue, (void *) &i, 10);
+//         //     // xQueueSend(file_data_queue, (void *) &i, 10);
 //         //     gpio_set_level(led_file, 1);
 //         //     vTaskDelay(10);
 //         //     gpio_set_level(led_file, 0);

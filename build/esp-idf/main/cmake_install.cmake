@@ -1,8 +1,8 @@
-# Install script for directory: D:/Users/esset/Documents/VSCode/esp-idf/FS-test/main
+# Install script for directory: D:/Users/esset/Documents/VSCode/esp-idf/DataFLY/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
-  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/FS-test")
+  set(CMAKE_INSTALL_PREFIX "C:/Program Files (x86)/Data-Fly")
 endif()
 string(REGEX REPLACE "/$" "" CMAKE_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
 

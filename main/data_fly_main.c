@@ -46,8 +46,10 @@
 #include "driver/twai.h"
 
 #include "sd_card.h"
+#include "trigger_button.h"
 #include "file_handle.h"
 #include "can_node.h"
+
 
 static const char *TAG = "DATA_FLY_MAIN_C";
 
@@ -55,8 +57,6 @@ static const char *TAG = "DATA_FLY_MAIN_C";
 
 void app_main(void)
 {
-    
-
     esp_err_t ret;
 
     // SD-card and SPI Initialisation.
@@ -119,15 +119,25 @@ void app_main(void)
         printf("Failed to start driver\n");
         return;
     }    
+
+// Initiate trigger related stuff.
+    initBuzzerAndButton();
+    createInterruptQueues();
+    xTaskCreatePinnedToCore(triggerActive, "active trigger task", 2048, NULL, 1, NULL, 1);
+
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(INPUT_PIN, gpio_interrupt_handler, (void *)INPUT_PIN);
    
 
     
-    createErrQueue();
-    createDataQueue();
+    createFileErrQueue();
+    createFileDataQueue();
     createDirectory("Log_Fs");
-    xTaskCreatePinnedToCore(&blinkErrorLED, "Blinking error led", 2048, NULL, 1, NULL, 1);
-    xTaskCreatePinnedToCore(&writeFile, "Writing data to file", 8192, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(&blinkFileErrorLED, "Blinking error led", 2048, NULL, 1, NULL, 1);
+    xTaskCreatePinnedToCore(&writeDataToFile, "Writing data to file", 8192, NULL, 2, NULL, 1);
     xTaskCreatePinnedToCore(&SendCANData, "Send CAN data to file", 2048, NULL, 1, NULL, 1); 
+
+    xTaskCreatePinnedToCore(&writeDataToErrorFiles, "Write CAN data to Error files", 8192, NULL, 2, NULL, 0);
     
 
 
