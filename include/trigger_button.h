@@ -12,7 +12,7 @@
 
 #define INPUT_PIN 25
 #define BUZZER_PIN 32
-#define DEBOUNCE_DELAY_MS 50
+#define DEBOUNCE_DELAY_MS 500
 
 // getting data from ISR and notice user.
 static QueueHandle_t trigger_interrupt_queue = NULL;
@@ -61,7 +61,9 @@ void triggerActive(void *params)
                 printf("GPIO %d was pressed %d times.\n", pinNumber, count++);
                 xQueueSend(trigger_listen_queue, (void*) &trigger, 10);
                 gpio_set_level(BUZZER_PIN, 1);
+                xQueueReceive(trigger_interrupt_queue, &pinNumber, 0); // A weird way to debounce.
                 vTaskDelay(2000 / portTICK_PERIOD_MS);
+                xQueueReceive(trigger_interrupt_queue, &pinNumber, 0); // A weird way to debounce.
                 gpio_set_level(BUZZER_PIN, 0);
             }
         }
