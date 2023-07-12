@@ -4,6 +4,8 @@
 //                                                                                                                             -> trigger_err_data_queue -> writeDataToErrFile(task).
 
 #pragma once
+
+#include "mcp2515.h"
 #include <stdio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -18,8 +20,10 @@
 static QueueHandle_t trigger_interrupt_queue = NULL;
 // Notifying the writeDataToFile task.
 static QueueHandle_t trigger_listen_queue = NULL;
-// 
+// TWAI Controller Error data queue. 
 static QueueHandle_t trigger_err_data_queue = NULL;
+// MCP2515 Controller Error data queue.
+static QueueHandle_t trigger_err_data_queue_mcp2515 = NULL;
 // TODO: implement a second error data queue for CAN data comming from the MCP2515 Controller (using HSPI and a third party library).
 static esp_err_t err_trigger;
 
@@ -28,6 +32,7 @@ void createInterruptQueues()
     trigger_interrupt_queue = xQueueCreate(1, sizeof(int));
     trigger_listen_queue = xQueueCreate(1, sizeof(int));
     trigger_err_data_queue = xQueueCreate(100, sizeof(twai_message_t));
+    trigger_err_data_queue_mcp2515 = xQueueCreate(100, sizeof(struct can_frame));
     if (!(trigger_err_data_queue && trigger_interrupt_queue))
     {
         err_trigger = ESP_FAIL;
@@ -66,7 +71,9 @@ void triggerActive(void *params)
                 xQueueReceive(trigger_interrupt_queue, &pinNumber, 0); // A weird way to debounce.
                 gpio_set_level(BUZZER_PIN, 0);
             }
+            vTaskDelay(0);
         }
+        vTaskDelay(0);
     }
 }
 

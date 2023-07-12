@@ -12,17 +12,19 @@
 // data from the CAN bus, and then pass it to the file. Following this approach provide a thread safe, atomic 
 // behaviour for writing. (Time constraints and rapidity to be mesured later).
 #pragma once
-#include "freertos/queue.h"
-#include "esp_timer.h"
+#include "mcp2515.h"
 
 static const uint8_t led_file = 33;
 static esp_err_t err_file; 
-static int count_file = 3000;
+static int count_file = 4000;
 
 // const char* "FILE_HANDLE_H" = "FILE_HANDLDE_H";
 
 static QueueHandle_t file_err_queue = NULL;
 static QueueHandle_t file_data_queue = NULL;
+static QueueHandle_t file_data_queue_mcp2515 = NULL;
+QueueHandle_t file_name_queue = NULL;
+
 
 
 // Regular function: creating the queue for handling errors.
@@ -44,11 +46,12 @@ void createFileErrQueue()
 // This function is to be modified later, for causes of globality, the data is likely to be coming
 // other source files, which makes passing data between them a little bit tricky.
 
-void createFileDataQueue()
+void createFileDataQueues()
 {
     // file_data_queue = xQueueCreate(64, sizeof(char));
-    file_data_queue = xQueueCreate(100, sizeof(twai_message_t));
-    if (!file_data_queue)
+    file_data_queue = xQueueCreate(1000, sizeof(twai_message_t));
+    file_data_queue_mcp2515 = xQueueCreate(1000, sizeof(struct can_frame));
+    if (!(file_data_queue && file_data_queue_mcp2515))
     {
         err_file = ESP_FAIL;
         if (xQueueSend(file_err_queue, (void *) &err_file, 10) != pdPASS)
@@ -58,6 +61,23 @@ void createFileDataQueue()
         ESP_LOGE("FILE_HANDLE_H", "Error Creating DATA Queue");
     } else {
         ESP_LOGI("FILE_HANDLE_H", "Data Queue created succesfully");
+    }
+}
+
+void createFileNameQueue()
+{
+
+    file_name_queue = xQueueCreate(1, sizeof(char*));
+    if (!file_name_queue)
+    {
+        err_file = ESP_FAIL;
+        if (xQueueSend(file_err_queue, (void *) &err_file, 10) != pdPASS)
+        {
+            gpio_set_level(led_file, 1);
+        }
+        ESP_LOGE("FILE_HANDLE_H", "Error Creating FileName Queue");
+    } else {
+        ESP_LOGI("FILE_HANDLE_H", "FileName Queue created succesfully");
     }
 }
 
@@ -113,10 +133,11 @@ void createDirectory(const char* file_name_)
 }
 
 
-// Regular function: Returning the name of the file to be ceated. Yeaaaaah another 10 line function to create the obvious, long live C. 
-// This function is to be modified later, as the name of the file would strongly depend on the date of creation.
-// For now it just appends an increasing number to the file. 
-
+/// @brief Regular function: Returning the name of the file to be ceated. Yeaaaaah another 10 line function to create the obvious, long live C. 
+/// This function is to be modified later, as the name of the file would strongly depend on the date of creation.
+/// For now it just appends an increasing number to the file. 
+/// @param is_data, true -> create file inside LOG_FS: false -> create file inside ERR_FS.
+/// @return file name in dynamic memory.
 const char* getFileName(bool is_data)
 {
     char int_str[32];
@@ -147,6 +168,22 @@ void sendErrorMessagesDuration(twai_message_t* message, bool* send_err_messages,
         *send_err_messages = false;
 }
 
+/// @brief Alternative version for messages sent from MCP2515 Controller. send error messages to error data queues for a specific duration (2 minutes)
+/// @param message TWAI (CAN) message to send
+/// @param send_err_messages a bool variable showing whether error messages should be sent or not.
+/// @param start_time starting time of sending error messages. 
+void sendErrorMessagesDurationMCP(struct can_frame* message, bool* send_err_messages, int64_t* start_time)
+{
+    // int64_t start_time = esp_timer_get_time();
+    int64_t end_time = esp_timer_get_time();
+    int64_t time_difference = end_time - *start_time;
+    int64_t duration = 1 * 60 * 1e6;
+    if(time_difference < duration)
+        xQueueSend(trigger_err_data_queue_mcp2515, (void*) message, 0);
+    else
+        *send_err_messages = false;
+}
+
 /// @brief Task: Create a file in sd-card, and write buffers that comes into the queue.
 // This task is to be modified (for compatibility reasons).
 // Some few important details about writing data to files.
@@ -165,6 +202,67 @@ void sendErrorMessagesDuration(twai_message_t* message, bool* send_err_messages,
 //      -If the file has reached some size limit.
 // Alternatively, a new file should be created:
 
+void writeDataToFileMCP(void* pvParameter)
+{
+    // vTaskDelay(100);
+    // const char* file_name = getFileName(true);
+    char* file_name;
+    int number_of_lines = 0;
+    if (xQueueReceive(file_name_queue, &file_name, portMAX_DELAY))
+    {
+        // Process the received string
+        printf("Received string: %s\n", file_name);
+    }
+    bool send_err_messages = false;
+    double log_start_time = (double) esp_timer_get_time()*1e-6;
+    FILE *f = fopen((const char*) file_name, "a");
+    if (!f)
+    {
+        ESP_LOGE("FILE_HANDLE_H", "Failed to open file %s for writing", file_name);
+    } else {
+        ESP_LOGI("FILE_HANDLE_H", "Received File %s created succesfully", file_name);
+        fprintf(f, "batatis");
+        fclose(f);
+        f = fopen((const char*) file_name, "a");
+    }
+    while (true)
+    {
+        struct can_frame mcp_message;
+        int64_t start_err_msg_time;
+        // ------------- TWAI Controller message reception ------------- //
+
+        // --------------- MCP2515 Controller message reception ------------- //
+        // Just a duplication of the previous function with some cheap cheat :).
+        // I think it's a better idea to make the second CAN message handler in a separate task.
+        // But I don't think it would improve speed :(. (IDK it may be at the level of fprintf).
+        if (xQueueReceive(file_data_queue_mcp2515, &mcp_message, 1000) != pdPASS)
+        {
+            ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the MCP queue");
+            vTaskDelay(100);
+        } else {
+            fprintf(f, " %f 2        %03lX             Tx   d %d", (double) (esp_timer_get_time()*1e-6) - log_start_time, 
+            mcp_message.can_id, mcp_message.can_dlc);
+            for (int i = 0; i < mcp_message.can_dlc; i++) 
+                fprintf(f, " %02X", mcp_message.data[i]);
+            fprintf(f, "\n");
+            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
+            {
+                fclose(f);
+                ESP_LOGI("FILE_HANDLE_H", "file Closed");
+                f = fopen(file_name, "a");
+                number_of_lines = 0;
+            }
+            if(send_err_messages)
+                sendErrorMessagesDurationMCP(&mcp_message, &send_err_messages, &start_err_msg_time);
+        }
+        // vTaskDelay(0);
+        taskYIELD();
+    }
+    vTaskDelete(NULL);
+}
+
+
+
 void writeDataToFile(void* pvParameter)
 {
     // vTaskDelay(100);
@@ -177,15 +275,17 @@ void writeDataToFile(void* pvParameter)
         ESP_LOGE("FILE_HANDLE_H", "Failed to open file %s for writing", file_name);
     } else {
         ESP_LOGI("FILE_HANDLE_H", "File %s created succesfully", file_name);
+        xQueueSend(file_name_queue, &file_name, portMAX_DELAY);
     }
     while (true)
     {
         twai_message_t message;
+        struct can_frame mcp_message;
         int listen_message;
         int64_t start_err_msg_time;
         if (xQueueReceive(file_data_queue, &message, 10000) != pdPASS)
         {
-            xQueueSend(file_err_queue, (void*) &err_file, portMAX_DELAY);
+            // xQueueSend(file_err_queue, (void*) &err_file, portMAX_DELAY);
             ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the queue");
             break;
         } else {
@@ -194,8 +294,15 @@ void writeDataToFile(void* pvParameter)
             message.identifier, data_or_request, message.data_length_code);
             for (int i = 0; i < message.data_length_code; i++) 
                 fprintf(f, " %02X", message.data[i]);
-            fprintf(f, "\n");
-            
+            fprintf(f, "\n");  
+
+            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would lost.
+            {
+                fclose(f);
+                ESP_LOGI("FILE_HANDLE_H", "Log file Closed");
+                f = fopen(file_name, "a");
+                number_of_lines = 0;
+            }          
             // --------------- Check for errors -----------------//
             if(xQueueReceive(trigger_listen_queue, (void*) &listen_message, 0))
             {
@@ -206,12 +313,19 @@ void writeDataToFile(void* pvParameter)
                 sendErrorMessagesDuration(&message, &send_err_messages, &start_err_msg_time);
                 
         }
-        if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
+
+         if (xQueueReceive(file_data_queue_mcp2515, &mcp_message, 1000) != pdPASS)
         {
-            fclose(f);
-            ESP_LOGI("FILE_HANDLE_H", "file Closed");
-            f = fopen(file_name, "a");
-            number_of_lines = 0;
+            ESP_LOGE("FILE_HANDLE_H", "Error receiving data from the MCP queue");
+            // vTaskDelay(100);
+        } else {
+            fprintf(f, " %f 2        %03lX             Tx   d %d", (double) (esp_timer_get_time()*1e-6), 
+            mcp_message.can_id, mcp_message.can_dlc);
+            for (int i = 0; i < mcp_message.can_dlc; i++) 
+                fprintf(f, " %02X", mcp_message.data[i]);
+            fprintf(f, "\n");
+            if(send_err_messages)
+                sendErrorMessagesDurationMCP(&mcp_message, &send_err_messages, &start_err_msg_time);
         }
         vTaskDelay(0);
     }
@@ -224,11 +338,12 @@ void writeDataToErrorFiles(void* pvParameter)
     int number_of_lines = 0;
     const char* file_name = getFileName(false);
     twai_message_t message;
+    struct can_frame mcp_message;
     FILE *f = fopen(file_name, "w");
     while (true)
     {
 
-        if(xQueueReceive(trigger_err_data_queue, (void*) &message, portMAX_DELAY) == pdPASS)
+        if(xQueueReceive(trigger_err_data_queue, &message, 0) == pdPASS)
         {
             char data_or_request = message.rtr ? 'r' : 'd';
             fprintf(f, " %f 1        %03lX             Tx   %c %d", (double) esp_timer_get_time()*1e-6, 
@@ -236,40 +351,26 @@ void writeDataToErrorFiles(void* pvParameter)
             for (int i = 0; i < message.data_length_code; i++) 
                 fprintf(f, " %02X", message.data[i]);
             fprintf(f, "\n");
-            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would not be saved.
+            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would lost.
             {
                 fclose(f);
                 ESP_LOGI("FILE_HANDLE_H", "Error file Closed");
                 f = fopen(file_name, "a");
                 number_of_lines = 0;
             }
+        } else  {
             vTaskDelay(0);
         }
-        // fclose(f);
+        // if (xQueueReceive(trigger_err_data_queue_mcp2515, &mcp_message, 0) == pdPASS)
+        // {
+        //     fprintf(f, " %f 2        %03lX             Tx   d %d", (double) esp_timer_get_time()*1e-6, 
+        //     mcp_message.can_id, mcp_message.can_dlc);
+        //     for (int i = 0; i < mcp_message.can_dlc; i++) 
+        //         fprintf(f, " %02X", mcp_message.data[i]);
+        //     fprintf(f, "\n");
+        // }
+        // vTaskDelay(0);
     }
     fclose(f);
     vTaskDelete(NULL);
 }
-
-// void sendDataToWrite(void* pvParameter)
-// {
-//     int count = 0;
-//     while (1)
-//     {
-//         // const char* text = "Strangers passing in the street";
-//         ESP_LOGI("FILE_HANDLE_H", "Sending %d", count);
-//         xQueueSend(file_data_queue, (void *) &count, portMAX_DELAY);
-//         // for (size_t i = 0; i < 5; i++)
-//         // {
-//         //     // xQueueSend(file_data_queue, (void *) &i, 10);
-//         //     gpio_set_level(led_file, 1);
-//         //     vTaskDelay(10);
-//         //     gpio_set_level(led_file, 0);
-//         //     vTaskDelay(10);
-//         // }
-//         count++;
-//         // taskYIELD();
-//         vTaskDelay(1);
-//     }  
-//     vTaskDelete(NULL);
-// }

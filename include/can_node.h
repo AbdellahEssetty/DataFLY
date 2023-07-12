@@ -14,19 +14,6 @@ void SendCANData(void *param)
             ESP_LOGE("CAN_NODE_H", "Failed to receive message\n");
             break;
         }
-        //Process received message
-        // if (message.extd) {
-        //     ESP_LOGI("CAN_NODE_H", "Message is in Extended Format\n");
-        // } else {
-        //     ESP_LOGI("CAN_NODE_H", "Message is in Standard Format\n");
-        // }
-        // ESP_LOGI("CAN_NODE_H", "ID is %ld\n", message.identifier);
-        // if (!(message.rtr)) {
-        //     for (int i = 0; i < message.data_length_code; i++) {
-        //         printf("Data byte %d = %d\n", i, message.data[i]);
-        //     }
-        // }
-        
         vTaskDelay(0);
     }
     vTaskDelete(NULL);
