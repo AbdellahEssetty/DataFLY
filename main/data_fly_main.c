@@ -48,7 +48,6 @@
 #include "freertos/queue.h"
 #include "esp_timer.h"
 
-// #include "can_node_mcp2515.h"
 #include "sd_card.h"
 #include "trigger_button.h"
 #include "file_handle.h"
@@ -128,7 +127,7 @@ void app_main(void)
 // Initiate trigger related stuff.
     initBuzzerAndButton();
     createInterruptQueues();
-    // xTaskCreatePinnedToCore(triggerActive, "active trigger task", 2048, NULL, 1, NULL, 0);
+    xTaskCreatePinnedToCore(triggerActive, "active trigger task", 2048, NULL, 0, NULL, 0);
 
     gpio_install_isr_service(0);
     gpio_isr_handler_add(INPUT_PIN, gpio_interrupt_handler, (void *)INPUT_PIN);
@@ -145,21 +144,20 @@ void app_main(void)
     xTaskCreatePinnedToCore(&writeDataToFile, "Writing data to file", 8192, NULL, 10, NULL, 1);
     xTaskCreatePinnedToCore(&SendCANData, "Send CAN data to file", 2048, NULL, 8, NULL, 1); 
 
-    // xTaskCreatePinnedToCore(&writeDataToErrorFiles, "Write CAN data to Error files", 8192, NULL, 2, NULL, 1);
-    xTaskCreatePinnedToCore(&sendCanDataMCP2515, "Send MCP CAN data to be written", 8192, NULL, 0, NULL, 0);
-    // xTaskCreatePinnedToCore(&writeDataToFileMCP, "Write MCP data to file", 8192, NULL, 12, NULL, 1);
+    xTaskCreatePinnedToCore(&writeDataToErrorFiles, "Write CAN data to Error files", 8192, NULL, 0, NULL, 0);
+
+    xTaskCreatePinnedToCore(&sendCanDataMCP2515, "Send MCP CAN data to be written", 2048, NULL, 0, NULL, 0); /// !!!!!!!ALWAYS KEEP THE PRIORITY OF THIS TASK AS 0!!!!!!!!!! ///
+    xTaskCreatePinnedToCore(&writeDataToFileMCP, "Write MCP data to file", 8192, NULL, 10, NULL, 0);
     
     // Don't use any file operation after this point. 
     // All done, unmount partition and disable SPI peripheral
 
-    vTaskDelay(10000);
-    esp_vfs_fat_sdcard_unmount(mount_point, card);
-    ESP_LOGI(TAG, "Card unmounted");
+    // vTaskDelay(10000);
+    // esp_vfs_fat_sdcard_unmount(mount_point, card);
+    // ESP_LOGI(TAG, "Card unmounted");
 
     //deinitialize the bus after all devices are removed
-    spi_bus_free(host.slot);
-
-
+    // spi_bus_free(host.slot);
     ESP_LOGI(TAG, "Exit app_main(void)");
 }
 

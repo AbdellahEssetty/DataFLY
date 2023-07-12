@@ -65,35 +65,6 @@ void CAN_Init(void)
 	// xTaskCreatePinnedToCore(CAN_Module_RX_Task_Polling, "CAN_Module_RX_Task_Polling", 16384, NULL, 20, NULL, 1);
 }
 
-void readCanDataMCP2515(void* params)
-{
-    struct can_frame can_message;
-	vTaskDelay(2000 / portTICK_PERIOD_MS);
-    CAN_Init();
-	vTaskDelay(2000 / portTICK_PERIOD_MS);
-    while(true)
-    {
-		// if(MCP2515_checkReceive())
-		// {
-            ERROR_t err_msg = MCP2515_readMessageAfterStatCheck(&can_message);
-			if (err_msg == ERROR_OK)
-			{
-				printf("messages received\n");
-				printf("CAN id: %ld === %03lX ---- CAN dlc: %u\nData: ", can_message.can_id, can_message.can_id, can_message.can_dlc);
-				for (size_t i = 0; i < can_message.can_dlc; i++)
-					printf("%02X ", can_message.data[i]);
-				printf("\n");
-			}
-		     else if(err_msg == ERROR_NOMSG){
-			ESP_LOGE("MAIN", "No messages received");
-			}
-            else {
-                ESP_LOGW("MAIN", "Error code: %d", err_msg);
-            }
-		vTaskDelay(0);
-    }
-}
-
 void sendCanDataMCP2515(void* params)
 {
     // vTaskDelay(2000 / portTICK_PERIOD_MS);
@@ -105,9 +76,7 @@ void sendCanDataMCP2515(void* params)
         ERROR_t err_msg = MCP2515_readMessageAfterStatCheck(&can_message);
         if (err_msg == ERROR_OK)
         {
-            // printf("a");
             xQueueSend(file_data_queue_mcp2515, (void *) &can_message, portMAX_DELAY);
-            taskYIELD();
         }
         else if (err_msg == ERROR_NOMSG) {
             // ESP_LOGW("CAN_NODE_MCP", "No messages received");
@@ -115,9 +84,8 @@ void sendCanDataMCP2515(void* params)
         }
         else {
             ESP_LOGE("CAN_NODE_MCP", "Error code: %d", err_msg);
-            break;
+            // break;
         }
-		// taskYIELD();
     }
     vTaskDelete(NULL);
 }

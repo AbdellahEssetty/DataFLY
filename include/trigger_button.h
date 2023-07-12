@@ -57,7 +57,7 @@ void triggerActive(void *params)
     TickType_t lastClickTime = 0;
     while (true)
     {
-        if (xQueueReceive(trigger_interrupt_queue, &pinNumber, portMAX_DELAY))
+        if (xQueueReceive(trigger_interrupt_queue, &pinNumber, portMAX_DELAY) == pdTRUE)
         {
             TickType_t currentTime = xTaskGetTickCount();
             if ((currentTime - lastClickTime) >= pdMS_TO_TICKS(DEBOUNCE_DELAY_MS))
