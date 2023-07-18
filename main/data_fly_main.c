@@ -139,6 +139,7 @@ void app_main(void)
     createFileNameQueue();
 
     createDirectory("Log_Fs");
+    createDirectory("Err_fs");
 
     xTaskCreatePinnedToCore(&blinkFileErrorLED, "Blinking error led", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(&writeDataToFile, "Writing data to file", 8192, NULL, 10, NULL, 1);
