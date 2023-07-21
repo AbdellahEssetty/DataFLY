@@ -69,7 +69,6 @@ void CAN_Init(void)
 
 void sendCanDataMCP2515(void* params)
 {
-    // vTaskDelay(2000 / portTICK_PERIOD_MS);
     struct can_frame can_message;
     int dummy_channel_1 = 0;
     int dummy_channel_2 = 0;
@@ -77,7 +76,7 @@ void sendCanDataMCP2515(void* params)
     bool flag_channel_2 = false;
     cJSON* cluster = cJSON_CreateObject();
     CAN_Init();
-    // vTaskDelay(2000 / portTICK_PERIOD_MS);
+
     while(true)
     {
         ERROR_t err_msg = MCP2515_readMessageAfterStatCheck(&can_message);
@@ -115,6 +114,10 @@ void sendCanDataMCP2515(void* params)
                 cJSON_AddNumberToObject(cluster, "Battery Temperature", decode(can_message.data, 14, 2, false, false, 1, 0));
                 cJSON_AddNumberToObject(cluster, "Turtle Mode", decode(can_message.data, 18, 2, false, false, 1, 0));
                 cJSON_AddNumberToObject(cluster, "Remaining Autonomy", decode(can_message.data, 34, 8, false, false, 1, 0));
+                cJSON_AddNumberToObject(cluster, "Right Indicator", decode(can_message.data, 0, 2, false, false, 1, 0));
+                cJSON_AddNumberToObject(cluster, "Left Indicator", decode(can_message.data, 2, 2, false, false, 1, 0));
+                cJSON_AddStringToObject(cluster, "Vehicle Vin", "Buggy_test");
+                cJSON_AddStringToObject(cluster, "Vehicle Name", "AMI Buggy");
 
                 // ESP_LOGI("CAN_NODE_MCP", "Right Indicator %f", decode(can_message.data, 0, 2, false, false, 1, 0));
                 // ESP_LOGI("CAN_NODE_MCP", "Left Indicator %f", decode(can_message.data, 2, 2, false, false, 1, 0));
@@ -129,11 +132,13 @@ void sendCanDataMCP2515(void* params)
             }
             if (flag_channel_1 && flag_channel_2)
             {
+                xQueueSend(cluster_json_queue, &cluster, portMAX_DELAY);
+                taskYIELD();
                 ESP_LOGI("CAN_NODE_MCP", "%s", cJSON_Print(cluster));
-                cJSON_Delete(cluster);
-                cluster = cJSON_CreateObject();
                 flag_channel_1 = false;
                 flag_channel_2 = false;
+                cJSON_Delete(cluster);
+                cluster = cJSON_CreateObject();
             }
         }
         else if (err_msg == ERROR_NOMSG) {
