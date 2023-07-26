@@ -48,6 +48,13 @@
 #include "freertos/queue.h"
 #include "esp_timer.h"
 
+#define FILE_LED 33
+#define FILE_LED_MCP 34
+#define WIFI_LED 35
+
+int trigger_count = 0;
+
+#include "leds.h"
 #include "wifi_mqtt.h"
 #include "sd_card.h"
 #include "trigger_button.h"
@@ -55,8 +62,9 @@
 #include "can_node.h"
 #include "can_node_mcp2515.h"
 
-
 static const char *TAG = "DATA_FLY_MAIN_C";
+
+
 
 
 
@@ -105,8 +113,6 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
     wifi_init();
-    xTaskCreatePinnedToCore(Publisher_Task, "Publisher_Task", 1024 * 5, NULL, 5, NULL, 0);
-
 
 
     // CAN Driver Initialisation.
@@ -136,6 +142,8 @@ void app_main(void)
         printf("Failed to start driver\n");
         return;
     }    
+// 
+    initLeds();
 
 // Initiate trigger related stuff.
     initBuzzerAndButton();
@@ -154,13 +162,15 @@ void app_main(void)
     createDirectory("Log_Fs");
     createDirectory("Err_fs");
 
+    xTaskCreatePinnedToCore(Publisher_Task, "Publisher_Task", 1024 * 5, NULL, 12, NULL, 0);
+
     xTaskCreatePinnedToCore(&blinkFileErrorLED, "Blinking error led", 2048, NULL, 1, NULL, 1);
     xTaskCreatePinnedToCore(&writeDataToFile, "Writing data to file", 8192, NULL, 10, NULL, 1);
     xTaskCreatePinnedToCore(&SendCANData, "Send CAN data to file", 2048, NULL, 8, NULL, 1); 
 
     xTaskCreatePinnedToCore(&writeDataToErrorFiles, "Write CAN data to Error files", 8192, NULL, 0, NULL, 0);
 
-    xTaskCreatePinnedToCore(&sendCanDataMCP2515, "Send MCP CAN data to be written", 2048, NULL, 0, NULL, 0); /// !!!!!!!ALWAYS KEEP THE PRIORITY OF THIS TASK AS 0!!!!!!!!!! ///
+    xTaskCreatePinnedToCore(&sendCanDataMCP2515, "Send MCP CAN data to be written", 4096, NULL, 0, NULL, 0); /// !!!!!!!ALWAYS KEEP THE PRIORITY OF THIS TASK AS 0!!!!!!!!!! ///
     xTaskCreatePinnedToCore(&writeDataToFileMCP, "Write MCP data to file", 8192, NULL, 10, NULL, 0);
     
     // Don't use any file operation after this point. 

@@ -106,7 +106,7 @@ void sendCanDataMCP2515(void* params)
                 dummy_channel_1 = 0;
                 flag_channel_1 = true;
             }
-            if (can_message.can_id == 0x510 && ++dummy_channel_2 >= 50 && !flag_channel_2)
+            if (can_message.can_id == 0x510 && ++dummy_channel_2 >= 150 && !flag_channel_2)
             {
                 // ESP_LOGW("CAN_NODE_MCP", "*****************");
                 cJSON_AddNumberToObject(cluster, "Brake System Problem", decode(can_message.data, 6, 2, false, false, 1, 0));
@@ -134,11 +134,12 @@ void sendCanDataMCP2515(void* params)
             {
                 xQueueSend(cluster_json_queue, &cluster, portMAX_DELAY);
                 taskYIELD();
+                // vTaskDelay(1);
                 ESP_LOGI("CAN_NODE_MCP", "%s", cJSON_Print(cluster));
                 flag_channel_1 = false;
                 flag_channel_2 = false;
-                cJSON_Delete(cluster);
-                cluster = cJSON_CreateObject();
+                // cJSON_Delete(cluster);
+                // cluster = cJSON_CreateObject();
             }
         }
         else if (err_msg == ERROR_NOMSG) {

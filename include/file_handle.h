@@ -15,9 +15,9 @@
 #include "mcp2515.h"
 #include "freertos/semphr.h"
 
-static const uint8_t led_file = 33;
+// static const uint8_t led_file = 33;
 static esp_err_t err_file; 
-static int count_file = 5000;
+static int count_file = 6000;
 
 static SemaphoreHandle_t file_mutex = NULL; 
 FILE* log_f = NULL;
@@ -208,6 +208,7 @@ void writeDataToFileMCP(void* pvParameter)
     char* file_name = getFileName(true);
     FILE* log_ff = NULL;
     int number_of_lines = 0;
+    int led_state = 0;
     // if (xQueueReceive(file_name_queue, &file_name, portMAX_DELAY))
     // {
     //     // Process the received string
@@ -240,22 +241,25 @@ void writeDataToFileMCP(void* pvParameter)
             vTaskDelay(100);
             break;
         } else if (log_ff){
-            xSemaphoreTake(file_mutex, portMAX_DELAY);
+            // xSemaphoreTake(file_mutex, portMAX_DELAY);
             fprintf(log_ff, " %f 2        %03lX             Tx   d %d", (double) (esp_timer_get_time()*1e-6) - log_start_time, 
             mcp_message.can_id, mcp_message.can_dlc);
             for (int i = 0; i < mcp_message.can_dlc; i++) 
                 fprintf(log_ff, " %02X", mcp_message.data[i]);
             fprintf(log_ff, "\n");
-            xSemaphoreGive(file_mutex);
+            // xSemaphoreGive(file_mutex);
             if(send_err_messages)
                 sendErrorMessagesDurationMCP(&mcp_message);
 
-            if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would lost.
+            if(number_of_lines++ == 500) //A condition to save the file. If not closed, all modification would lost.
             {
                 fclose(log_ff);
                 ESP_LOGI("FILE_HANDLE_H", "MCP Log file Closed");
                 log_ff = fopen(file_name, "a");
                 number_of_lines = 0;
+
+                led_state = led_state ^ 1;
+                gpio_set_level(led_file_mcp, led_state);
             }   
         }
         taskYIELD();
@@ -267,9 +271,10 @@ void writeDataToFileMCP(void* pvParameter)
 
 void writeDataToFile(void* pvParameter)
 {
-    // vTaskDelay(100);
+    
     const char* file_name = getFileName(true);
     int number_of_lines = 0;
+    int led_state = 0;
     // bool send_err_messages = false;
     file_mutex = xSemaphoreCreateMutex();
     if(!log_f)
@@ -296,13 +301,13 @@ void writeDataToFile(void* pvParameter)
             break;
         } else {
             char data_or_request = message.rtr ? 'r' : 'd';
-            xSemaphoreTake(file_mutex, portMAX_DELAY);
+            // xSemaphoreTake(file_mutex, portMAX_DELAY);
             fprintf(log_f, " %f 1        %03lX             Tx   %c %d", (double) esp_timer_get_time()*1e-6 - log_start_time, 
             message.identifier, data_or_request, message.data_length_code);
             for (int i = 0; i < message.data_length_code; i++) 
                 fprintf(log_f, " %02X", message.data[i]);
             fprintf(log_f, "\n");
-            xSemaphoreGive(file_mutex);  
+            // xSemaphoreGive(file_mutex);  
 
             if(number_of_lines++ == 1000) //A condition to save the file. If not closed, all modification would lost.
             {
@@ -310,6 +315,9 @@ void writeDataToFile(void* pvParameter)
                 ESP_LOGI("FILE_HANDLE_H", "Log file Closed");
                 log_f = fopen(file_name, "a");
                 number_of_lines = 0;
+
+                led_state = led_state ^ 1;
+                gpio_set_level(led_file, led_state);
             }          
             // --------------- Check for errors -----------------//
             if(xQueueReceive(trigger_listen_queue, (void*) &listen_message, 0) == pdTRUE)

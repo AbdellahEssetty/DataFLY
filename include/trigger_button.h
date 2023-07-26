@@ -12,9 +12,11 @@
 #include "freertos/queue.h"
 #include "driver/gpio.h"
 
-#define INPUT_PIN 25
+#define INPUT_PIN 35
 #define BUZZER_PIN 32
 #define DEBOUNCE_DELAY_MS 500
+
+
 
 // getting data from ISR and notice user.
 static QueueHandle_t trigger_interrupt_queue = NULL;
@@ -53,7 +55,7 @@ static void IRAM_ATTR gpio_interrupt_handler(void *args)
 
 void triggerActive(void *params)
 {
-    int pinNumber, count = 0, trigger = 0;
+    int pinNumber, trigger = 0;
     TickType_t lastClickTime = 0;
     while (true)
     {
@@ -63,7 +65,7 @@ void triggerActive(void *params)
             if ((currentTime - lastClickTime) >= pdMS_TO_TICKS(DEBOUNCE_DELAY_MS))
             {
                 lastClickTime = currentTime;
-                printf("GPIO %d was pressed %d times.\n", pinNumber, count++);
+                printf("GPIO %d was pressed %d times.\n", pinNumber, trigger_count++);
                 xQueueSend(trigger_listen_queue, (void*) &trigger, 10);
                 gpio_set_level(BUZZER_PIN, 1);
                 xQueueReceive(trigger_interrupt_queue, &pinNumber, 0); // A weird way to debounce.

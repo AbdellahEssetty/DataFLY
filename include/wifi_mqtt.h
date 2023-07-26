@@ -165,8 +165,9 @@ static void mqtt_app_start(void)
 
 void Publisher_Task(void *params)
 {
+    int led_state = 0;
     vTaskDelay(3000 / portTICK_PERIOD_MS);
-    cluster_json_queue = xQueueCreate(5, sizeof(cJSON*));
+    cluster_json_queue = xQueueCreate(1, sizeof(cJSON*));
     if(!cluster_json_queue)
     {
         ESP_LOGE(TAG_WIFI, "Cluster queue was NOT created");
@@ -185,8 +186,13 @@ void Publisher_Task(void *params)
             ESP_LOGI(TAG_WIFI, "Publishing .... %s", cJSON_Print(cluster_obj));
             if (MQTT_CONNEECTED)
             {
+                cJSON_AddNumberToObject(cluster_obj, "Trigger Clicked", trigger_count);
                 esp_mqtt_client_publish(client, "/heartbeat", cJSON_Print(cluster_obj), 0, 0, 0);
+                led_state = led_state ^ 1;
+                gpio_set_level(led_wifi, led_state);               
             }
+            cJSON_Delete(cluster_obj);
+            cluster_obj = cJSON_CreateObject();
         }
         vTaskDelay(15000 / portTICK_PERIOD_MS);
     }
